@@ -17,3 +17,8 @@ General applicability:
 
 
 All in all this is a simple idea that i have taken some steps towards. On a dataset of 1.2k images it took 1 google cloud node 1.5 hrs to train a classifcation dataset with AutoML.
+
+![512 x 512](test_samples/sample_audio.png)
+
+
+![3444 x 3445](scripts/v1_slow/audio.png)
