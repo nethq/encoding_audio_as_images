@@ -22,3 +22,5 @@ All in all this is a simple idea that i have taken some steps towards. On a data
 
 
 ![3444 x 3445](scripts/v1_slow/audio.png)
+
+[md5sum ternary_horizontal_sums_perfect_nums.png  -> b3991ed516a52e364fdf2376335a88d4  ternary_horizontal_sums_perfect_nums.png]
