@@ -1,12 +1,10 @@
 import streamlit as st
-from PIL import Image
-#improt base64
 import base64
-from PIL import Image
 import numpy as np
 from functools import partial
 from pydub import AudioSegment
 import pydub
+
 fill_empty_space_after_data_exhaustion = True
 
 def encode_alpha(value):
@@ -61,8 +59,11 @@ def unified_algorithm_v1(operation, image_filename, mask_scheme, endian='le', ou
     A universal function to handle both embedding (baking) and extracting (debaking) data in/from an image.
     """
     # Load image
-    with Image.open(image_filename) as img:
-        img_data = np.array(img)
+    import imageio
+    import numpy as np
+
+    # Read image
+    img_data = imageio.imread(image_filename)
 
     # Prepare mask operations
     mask_ops = prepare_mask_operations(mask_scheme)
@@ -96,9 +97,8 @@ def unified_algorithm_v1(operation, image_filename, mask_scheme, endian='le', ou
                     i += 1
                     j = 0
         
-        new_img = Image.fromarray(img_data)
         output_filename = output_filename if output_filename else "output_image.png"
-        new_img.save(output_filename)
+        imageio.imwrite(output_filename, img_data)
         print(f"Baked image saved as {output_filename}")
 
     elif operation == 'debake':
