@@ -1,26 +1,28 @@
-# encoding_audio_as_images
-This is kind of an experiment of mine that i applied in the Google Cloud Hack local event, where i proposed and applied a 2-way transformation on some wav samples.
+# encoding_audio_as_images - V3 - DPLMA - Referential Bitmap
 
-The theoretical postulate is simple - fitting data - as the values range for WAV samples is [-32k to 32k] -> 64k in total unique values.
-You can fit the actual audio data in an image format.
+## Overview
 
-If you continue to apply the idea some possible outcomes that i presumed applicable ->
+This is an optimised version (V3) of the `encoding_audio_as_images` tool. The initial version of the tool is laid out in its bare intent in version 1. This version has been improved based on the learnings and discoveries noted down during the development process.
 
-AI applicabiltiy:
-- Allows for the employment of all the models that work with images as input data streams.
-- Generation of unique "musical" images based on the trained inputs (Generation of new music that fits your taste)
-- Classification of music samples by simillarity to the trained network. (Liked songs recommendation specific to your trained dataset)
-- And the hardest idea that came to mind to test out - training a diffusion network to know only these inputs.
+If you are interested in the experimentation process, the progress that has been made, and the discoveries that have been made, you can check out the provided Python notebooks. Please note that these notebooks are not clearly labeled and the time and space complexity is sub-par.
 
-General applicability:
-- Now your images can have sound attached to them (that is if we find an efficient way to encode and decode the data in real time) (and if a way to store the data onto the original image itself without destroying it, you can even sign the image with your audio sample of your voice, so i.e you can speak through images)
+## Current Iteration
 
+The current iteration of the script is written in C++. If you wish to enable some experimental functionality, look through the macros, define the ones you wish to enable, and re-compile the script.
 
-All in all this is a simple idea that i have taken some steps towards. On a dataset of 1.2k images it took 1 google cloud node 1.5 hrs to train a classifcation dataset with AutoML.
+## Functionality
 
-![512 x 512](test_samples/sample_audio.png)
+This solution allows you to Encode/Decode any type of file into and out of a given PNG image. The solution has gone through many iterations and is still a work in progress. However, for 1080 images, it currently runs in less than 0.5 seconds, depending on the hardware.
 
+The recommended application is for embedding audio in images, but there is support for embedding other types of files. Please ensure you test the decoding of the data from the image yourself before passing it on to its journey as a steganogram.
 
-![3444 x 3445](scripts/v1_slow/audio.png)
+If you wish to COMPRESS/ENCRYPT the data you are embedding, you can use any tool you desire, as long as it can output to one or more files. The solution works with any type of file.
 
-[md5sum ternary_horizontal_sums_perfect_nums.png  -> b3991ed516a52e364fdf2376335a88d4  ternary_horizontal_sums_perfect_nums.png]
+## Known Issues
+
+When working with some particular extensions, there seems to be a problem with the ending 0s in the file data, as they seem to be trimmed short. If you encounter such a problem, you should change the `PAD_VALUE` macro to some arbitrary value that does not coincide with the ending values of your file. The same must be done with the decoding script.
+
+## Applicabiltiy
+
+The algorithm with which this steganographic process is applied allows the user an unrestricted freedom in manipulating the way that the data is encoded into the image,
+thus you should creafully look at the command output of the script and check if firstly the file you are trying to encode is cut, because it will be on "silent" mode.

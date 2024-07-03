@@ -1,0 +1,1 @@
+These files are from the STBI library, which is an open-source library available on GitHub. The STBI library provides functions for loading and manipulating images in various formats. It is a widely used library in the software development community. Kudos to the creators of the STBI library for their contribution to the open-source community.
