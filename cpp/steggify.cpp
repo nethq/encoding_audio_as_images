@@ -26,9 +26,11 @@
 #define BITS_IN_ATOMIC_TYPE 8
 #define STB
 
+#define STANDARD_ORDER "RGBA" //The expected image channel order
+
 using namespace std;
 
-string standard_order = "RGBA";
+string standard_orgitder = STANDARD_ORDER;
 
 #ifdef STB
 
@@ -81,10 +83,10 @@ class ReferentialBitmap {
     void map_order(const string order) {
         for (char channel : order) {
             switch (channel) {
-                case 'R': channel_image_data_order[channel] = int_tuple{0, int(order.find(channel))}; break;
-                case 'G': channel_image_data_order[channel] = int_tuple{1, int(order.find(channel))}; break;
-                case 'B': channel_image_data_order[channel] = int_tuple{2, int(order.find(channel))}; break;
-                case 'A': channel_image_data_order[channel] = int_tuple{3, int(order.find(channel))}; break;
+                case 'R': channel_image_data_order[channel] = int_tuple{(int)standard_order.find("R"), int(order.find(channel))}; break;
+                case 'G': channel_image_data_order[channel] = int_tuple{(int)standard_order.find("G"), int(order.find(channel))}; break;
+                case 'B': channel_image_data_order[channel] = int_tuple{(int)standard_order.find("B"), int(order.find(channel))}; break;
+                case 'A': channel_image_data_order[channel] = int_tuple{(int)standard_order.find("A"), int(order.find(channel))}; break;
             }
         }
     }
@@ -695,6 +697,9 @@ int main(int argc, char** argv) {
         } else if ((arg == "--masks" || arg == "-m") && i + 1 < argc) {
             while (i + 1 < argc && argv[i + 1][0] != '-') {
                 masks.push_back(argv[++i]);
+                #ifdef VV
+                //cout<< "mask: " << masks.back() << endl;
+                #endif
             }
         } else if ((arg == "--order" || arg == "-r") && i + 1 < argc) {
             order = argv[++i];
