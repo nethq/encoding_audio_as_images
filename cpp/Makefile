@@ -2,13 +2,13 @@
 image_path="examples/image.png"
 pixel_format="ARBG"
 
-r_mask="00000011"
-g_mask="00000011"
-b_mask="00000011"
-a_mask="00000011"
+r_mask="00001111"
+g_mask="00001111"
+b_mask="00001111"
+a_mask="00001111"
 
 encoded_image_path="results/hidden.png"
-audio_path="examples/test_data.txt"
+audio_path="examples/bg3_mt.mp3"
 decoded_image_path="results/decoded.$(shell echo $(audio_path) | awk -F . '{print $$NF}')"
 target="steggify.cpp"
 compiled_binary="steggify"

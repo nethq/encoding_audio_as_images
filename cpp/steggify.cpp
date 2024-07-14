@@ -30,15 +30,15 @@
 
 using namespace std;
 
-string standard_orgitder = STANDARD_ORDER;
+string standard_order = STANDARD_ORDER;
 
 #ifdef STB
 
     #define STB_IMAGE_IMPLEMENTATION
     #define STB_IMAGE_WRITE_IMPLEMENTATION
 
-    #include "../headers/stb_image.h"
-    #include "../headers/stb_image_write.h"
+    #include "headers/stb_image.h"
+    #include "headers/stb_image_write.h"
 
     vector<unsigned char> loadImage(const string& filename, int& width, int& height) {
         int n;
@@ -205,7 +205,7 @@ public:
         printf("Current allocatable storage in image:\n%lu bytes\n%lu KB\n%lu MB\n", referential_bitmap.size(), referential_bitmap.size() / 1024, referential_bitmap.size() / 1024 / 1024);
     }
     
-    bool populate_bitmap_with_file(const string& filename, size_t max_bytes) {
+    bool populate_bitmap_with_file(const string& filename, size_t max_bytes) { 
     ifstream file(filename, ios::binary);
     if (!file) {
         cerr << "Failed to open file: " << filename << endl;
@@ -231,9 +231,9 @@ public:
         fileData.erase(fileData.begin(), fileData.begin() + start_index);
     }
     #endif
-    
+
     size_t bytes_to_copy = (max_bytes == 0) ? fileData.size() : min(max_bytes, fileData.size());
-    
+
     for (size_t i = 0; i < bytes_to_copy && i < referential_bitmap.size(); ++i) {
         referential_bitmap[i] = static_cast<ATOMIC_TYPE>(fileData[i]);
     }
@@ -394,8 +394,12 @@ bool encode_atomic_push(string image_filename, string order, vector<string> mask
     file.read(fileData.data(), file_size);
     file.close();
 
-    // Populate the bitmap with file data
     bitmap.populate_bitmap_with_file(inputDataFile, file_size);
+
+    //print if the file will fit in the bitmap or will it be truncated.
+    if (file_size > bitmap.referential_bitmap.size()) {
+        cout << "\n FILE SIZE IS BIGGER THAN THE CURRENTLY AVAILABLE BITMAP. TRUNCATING THE FILE! \n" << endl;
+    }
 
     // Push data to the image
     size_t storage_index = 0;
@@ -725,10 +729,11 @@ int main(int argc, char** argv) {
             outputFilename = inputFilename + "_encoded";
         }
         bool encodedCompletely = encode_atomic_push(inputFilename, order, masks, inputDataFile, outputFilename);
+
         if (encodedCompletely) {
-            cout << "\n\nSUCCESS! - The file was encoded completely into the image.\n\n" << endl;
+            cout << "\n\nSUCCESS!\n\n" << endl;
         } else {
-            cout << "\n\nWARNING! - The file was truncated while encoding into the image.\n\n" << endl;
+            cout << "\n\nWARNING! - Error in the encoding process.\n\n" << endl;
         }
     } else {
         print_help();
