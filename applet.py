@@ -15,17 +15,18 @@ st.set_page_config(
 
 # Determine the correct binary based on system architecture
 try:
-    if platform.architecture()[0] == '32bit':
-        STEGGIFY_PATH = os.path.join(os.getcwd(), "binaries/steggify_linux32")
-    else:
-        STEGGIFY_PATH = os.path.join(os.getcwd(), "binaries/steggify_linux64")
+    STEGGIFY_PATH = os.path.join(os.getcwd(), "binaries/steggify")
 except Exception as e:
     st.error(f"Error determining system architecture: {e}")
     st.stop()
 
-# Check if the binary exists
+# Check if the binary exists and is executable
 if not os.path.isfile(STEGGIFY_PATH):
-    st.error(f"'steggify' binary not found at {STEGGIFY_PATH}. Please ensure it's placed correctly.")
+    st.error(f"'steggify' binary not found at {STEGGIFY_PATH}. It should be built during deployment.")
+    st.stop()
+
+if not os.access(STEGGIFY_PATH, os.X_OK):
+    st.error(f"'steggify' binary at {STEGGIFY_PATH} is not executable. Please check the build process.")
     st.stop()
 
 def run_command(command):
@@ -38,7 +39,7 @@ def run_command(command):
         )
         return result.stdout
     except FileNotFoundError:
-        st.error("The 'steggify' binary was not found. Please ensure it is correctly placed.")
+        st.error("The 'steggify' binary was not found. Please ensure it is correctly built.")
         return None
     except subprocess.CalledProcessError as e:
         st.error(f"Error during execution: {e.stderr}")
@@ -73,7 +74,9 @@ def encode_image(input_image_path, input_data_path, masks, order, output_image_p
             if os.path.isfile(output_image_path):
                 try:
                     encoded_image = Image.open(output_image_path)
-                    st.image(encoded_image, caption="Encoded Image", use_column_width=True)
+                    # Resize image to take up ~60% of horizontal space
+                    encoded_image.thumbnail((int(st.get_window_width() * 0.6), None))
+                    st.image(encoded_image, caption="Encoded Image", use_column_width=False)
                 except Exception as img_e:
                     st.error(f"Failed to load encoded image: {img_e}")
                 with open(output_image_path, "rb") as file:
@@ -106,7 +109,8 @@ def decode_image(input_image_path, masks, order, output_file_path):
                 if output_file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp')):
                     try:
                         decoded_image = Image.open(output_file_path)
-                        st.image(decoded_image, caption="Decoded Image", use_column_width=True)
+                        decoded_image.thumbnail((int(st.get_window_width() * 0.6), None))
+                        st.image(decoded_image, caption="Decoded Image", use_column_width=False)
                     except Exception as img_e:
                         st.error(f"Failed to load decoded image: {img_e}")
                 else:
@@ -224,15 +228,14 @@ with tab2:
 with tab3:
     st.header("Demo")
     st.write("Provide text or upload a file to encode into a white image, then decode it back.")
-    
+
     demo_input_type = st.radio("Choose Input Type", ("Text", "File"))
-    
+
     if demo_input_type == "Text":
         demo_text = st.text_area("Enter text to encode", "Sample text for Steggify encoding.")
-        demo_masks = {}
-        demo_order = "ARGB"
-        if st.checkbox("Customize Masks and Channel Order"):
-            st.markdown("### Customize Masks (8-bit binary)")
+        st.markdown("### Customize Masks and Channel Order")
+        customize_demo = st.checkbox("Customize Masks and Channel Order")
+        if customize_demo:
             col1, col2 = st.columns(2)
             with col1:
                 demo_mask_r = st.text_input("Mask for Red Channel", value="00001111")
@@ -240,11 +243,12 @@ with tab3:
             with col2:
                 demo_mask_b = st.text_input("Mask for Blue Channel", value="00001111")
                 demo_mask_a = st.text_input("Mask for Alpha Channel", value="00001111")
-            demo_order = st.selectbox("Channel Order", options=["ARGB", "RGBA", "BGRA", "ABGR", "ARBG"])
+            demo_order = st.selectbox("Channel Order", options=["ARGB", "RGBA", "BGRA", "ABGR", "ARBG"], index=0)
             demo_masks = [demo_mask_r, demo_mask_g, demo_mask_b, demo_mask_a]
         else:
             demo_masks = ["00001111", "00001111", "00001111", "00001111"]
-        
+            demo_order = "ARGB"
+
         if st.button("Run Demo"):
             if demo_text.strip():
                 if not validate_masks(demo_masks):
@@ -255,7 +259,7 @@ with tab3:
                         order = demo_order
                         output_image = "demo_encoded.png"
                         output_file = "demo_decoded.txt"
-                        
+
                         # Create white image
                         white_image = create_white_image()
                         if white_image is None:
@@ -274,11 +278,18 @@ with tab3:
                             output_path = os.path.join(tempfile.gettempdir(), output_image)
 
                             # Encode
-                            encode_image(tmp_white_img_path, tmp_data_path, masks, order, output_path)
+                            encode_image(tmp_img_path=tmp_white_img_path, 
+                                         input_data_path=tmp_data_path, 
+                                         masks=masks, 
+                                         order=order, 
+                                         output_image_path=output_path)
 
                             # Decode
                             decoded_output_path = os.path.join(tempfile.gettempdir(), output_file)
-                            decode_image(output_path, masks, order, decoded_output_path)
+                            decode_image(input_image_path=output_path, 
+                                         masks=masks, 
+                                         order=order, 
+                                         output_file_path=decoded_output_path)
 
                             # Read decoded text
                             if os.path.isfile(decoded_output_path):
@@ -295,7 +306,8 @@ with tab3:
                             if os.path.isfile(output_path):
                                 try:
                                     encoded_image = Image.open(output_path)
-                                    st.image(encoded_image, caption="Encoded Image", use_column_width=True)
+                                    encoded_image.thumbnail((int(st.get_window_width() * 0.6), None))
+                                    st.image(encoded_image, caption="Encoded Image", use_column_width=False)
                                 except Exception as img_e:
                                     st.error(f"Failed to load encoded image: {img_e}")
                             else:
@@ -315,13 +327,12 @@ with tab3:
                         st.error(f"Demo failed: {e}")
             else:
                 st.error("Please enter some text to encode.")
-    
+
     else:
         demo_file = st.file_uploader("Upload a file to encode", type=["txt", "csv", "json", "bin", "mp3", "wav"])
-        demo_masks = {}
-        demo_order = "ARGB"
-        if st.checkbox("Customize Masks and Channel Order"):
-            st.markdown("### Customize Masks (8-bit binary)")
+        st.markdown("### Customize Masks and Channel Order")
+        customize_demo_file = st.checkbox("Customize Masks and Channel Order")
+        if customize_demo_file:
             col1, col2 = st.columns(2)
             with col1:
                 demo_mask_r = st.text_input("Mask for Red Channel", value="00001111")
@@ -329,11 +340,12 @@ with tab3:
             with col2:
                 demo_mask_b = st.text_input("Mask for Blue Channel", value="00001111")
                 demo_mask_a = st.text_input("Mask for Alpha Channel", value="00001111")
-            demo_order = st.selectbox("Channel Order", options=["ARGB", "RGBA", "BGRA", "ABGR", "ARBG"])
+            demo_order = st.selectbox("Channel Order", options=["ARGB", "RGBA", "BGRA", "ABGR", "ARBG"], index=0)
             demo_masks = [demo_mask_r, demo_mask_g, demo_mask_b, demo_mask_a]
         else:
             demo_masks = ["00001111", "00001111", "00001111", "00001111"]
-        
+            demo_order = "ARGB"
+
         if st.button("Run Demo"):
             if demo_file:
                 if not validate_masks(demo_masks):
@@ -344,7 +356,7 @@ with tab3:
                         order = demo_order
                         output_image = "demo_encoded.png"
                         output_file = "demo_decoded" + os.path.splitext(demo_file.name)[1]
-                        
+
                         # Create white image
                         white_image = create_white_image()
                         if white_image is None:
@@ -363,11 +375,18 @@ with tab3:
                             output_path = os.path.join(tempfile.gettempdir(), output_image)
 
                             # Encode
-                            encode_image(tmp_white_img_path, tmp_data_path, masks, order, output_path)
+                            encode_image(tmp_img_path=tmp_white_img_path, 
+                                         input_data_path=tmp_data_path, 
+                                         masks=masks, 
+                                         order=order, 
+                                         output_image_path=output_path)
 
                             # Decode
                             decoded_output_path = os.path.join(tempfile.gettempdir(), output_file)
-                            decode_image(output_path, masks, order, decoded_output_path)
+                            decode_image(input_image_path=output_path, 
+                                         masks=masks, 
+                                         order=order, 
+                                         output_file_path=decoded_output_path)
 
                             # Provide download button for decoded file
                             if os.path.isfile(decoded_output_path):
@@ -389,7 +408,8 @@ with tab3:
                             if os.path.isfile(output_path):
                                 try:
                                     encoded_image = Image.open(output_path)
-                                    st.image(encoded_image, caption="Encoded Image", use_column_width=True)
+                                    encoded_image.thumbnail((int(st.get_window_width() * 0.6), None))
+                                    st.image(encoded_image, caption="Encoded Image", use_column_width=False)
                                 except Exception as img_e:
                                     st.error(f"Failed to load encoded image: {img_e}")
                             else:
