@@ -1,198 +1,411 @@
 import streamlit as st
-import base64
-import numpy as np
-from functools import partial
-from pydub import AudioSegment
-import pydub
+import subprocess
+import os
+from PIL import Image
+import tempfile
+import platform
+import io
 
-fill_empty_space_after_data_exhaustion = True
+# Set global page configuration for better layout
+st.set_page_config(
+    page_title="Steggify Encoder/Decoder",
+    layout="wide",
+    initial_sidebar_state="auto",
+)
 
-def encode_alpha(value):
-    return value
-
-def decode_alpha(value):
-    return value
-
-transformation_list = {3:(encode_alpha,decode_alpha)} # a list of tuples (<channel_index>,dynamic_encoding_function,dynamic_decoding_function)
-
-def prepare_mask_operations(global_masking_operation):
-    """
-    Prepare mask operations to optimize computation in pixel manipulation functions.
-    """
-    shifts = {'R': 0, 'G': 1, 'B': 2, 'A': 3}
-    mask_ops = {}
-    for mask_value, shift_amount, channel in global_masking_operation:
-        channel_index = shifts[channel]
-        mask_ops[channel_index] = (mask_value, shift_amount)
-    return mask_ops
-
-def mask_and_embed(pixel, value, mask_ops,transformations = transformation_list):
-    """
-    Apply a mask to a pixel and embed a value into it using pre-calculated mask operations.
-    """
-    result_pixel = list(pixel)
-    for channel_index, (mask_value, shift_amount) in mask_ops.items():
-        # Extract appropriate bits from 'value'
-        bits_to_embed = (value >> shift_amount) & mask_value
-        # Mask out the bits in the original pixel and embed the new bits
-        if channel_index in transformations:
-            bits_to_embed = transformations[channel_index][0](bits_to_embed)
-        else:
-            result_pixel[channel_index] = (pixel[channel_index] & ~mask_value) | bits_to_embed
-    return tuple(result_pixel)
-
-def extract_from_mask(pixel, mask_ops,transformations=transformation_list):
-    """
-    Extract data from a pixel using pre-calculated mask operations.
-    """
-    extracted_value = 0
-    for channel_index, (mask_value, shift_amount) in mask_ops.items():
-        # Extract the bits from the pixel and position them correctly in the output value
-        bits = (pixel[channel_index] & mask_value) << shift_amount
-        if channel_index in transformations:
-            bits = transformations[channel_index][1](bits)
-        extracted_value |= bits
-    return extracted_value
-
-def unified_algorithm_v1(operation, image_filename, mask_scheme, endian='le', output_filename=None, yield_function=None, write_function=None,transformation_functions=transformation_list,fill_empty_space_after_data_exhaustion=True):
-    """
-    A universal function to handle both embedding (baking) and extracting (debaking) data in/from an image.
-    """
-    # Load image
-    import imageio
-    import numpy as np
-
-    # Read image
-    img_data = imageio.imread(image_filename)
-
-    # Prepare mask operations
-    mask_ops = prepare_mask_operations(mask_scheme)
-    #for each channel, generate an empty transformation function
-
-    if operation == 'bake':
-        if yield_function is None:
-            raise ValueError("yield_function must be provided for baking.")
-        #if no alpha channel is present, add it
-        if img_data.shape[2] == 3:
-            img_data = np.dstack((img_data, np.full_like(img_data[:,:,0], 255)))
-            print("Alpha channel added to the image data.")
-        print("Shape of picture: ", img_data.shape)
-        i, j = 0, 0
-        for data in yield_function():
-            if i >= img_data.shape[0]:
-                break  # Stop if we run out of image space
-            masked_value = mask_and_embed(img_data[i][j], data, mask_ops,transformation_functions)
-            img_data[i][j] = masked_value
-            j += 1
-            if j >= img_data.shape[1]:
-                i += 1
-                j = 0
-        
-        if fill_empty_space_after_data_exhaustion:
-            print("Data exhausted. Filling the rest of the image with zeros.")
-            while i < img_data.shape[0]:
-                img_data[i][j] = (0, 0, 0, 0)
-                j += 1
-                if j >= img_data.shape[1]:
-                    i += 1
-                    j = 0
-        
-        output_filename = output_filename if output_filename else "output_image.png"
-        imageio.imwrite(output_filename, img_data)
-        print(f"Baked image saved as {output_filename}")
-
-    elif operation == 'debake':
-        extracted_data = (extract_from_mask(pixel, mask_ops,transformation_functions) for row in img_data for pixel in row)
-
-        if write_function is None:
-            raise ValueError("write_function must be provided for debaking.")
-
-        # Use write_function to handle the output of extracted data
-        write_function(extracted_data)
-        print(f"Extracted data written using the provided write function.")
+# Determine the correct binary based on system architecture
+try:
+    if platform.architecture()[0] == '32bit':
+        STEGGIFY_PATH = os.path.join(os.getcwd(), "binaries/steggify_linux32")
     else:
-        raise ValueError("Unsupported operation specified")
+        STEGGIFY_PATH = os.path.join(os.getcwd(), "binaries/steggify_linux64")
+except Exception as e:
+    st.error(f"Error determining system architecture: {e}")
+    st.stop()
 
-v2_masking = [
-    (0b11111111, 0, 'A'), 
-    (0b00000011, 8, 'R'), 
-    (0b00000111, 10, 'G'), 
-    (0b00000111, 13, 'B')
-]
+# Check if the binary exists
+if not os.path.isfile(STEGGIFY_PATH):
+    st.error(f"'steggify' binary not found at {STEGGIFY_PATH}. Please ensure it's placed correctly.")
+    st.stop()
 
-# Function to handle baking operation
-def bake(image_file, audio_file, masking_scheme):
-
-    def audio_read_yield_function():
-        #load the audio file using pydub
-        audio_samples = pydub.AudioSegment.from_file(audio_file, format="wav", frame_rate=48000, sample_width=2, channels=1)
-        samples = audio_samples.get_array_of_samples()
-        for sample in samples:
-            yield sample
-            
-    unified_algorithm_v1("bake",image_file, v2_masking,yield_function=audio_read_yield_function, output_filename="streamlit_temp_baked_image.png")
-    # Display the baked image
-    st.image("streamlit_temp_baked_image.png", caption="Baked Image", use_column_width=True)
-    st.success("Audio baked successfully! Save the image, so that you can upload it for debaking.")
-    # Provide a download link for the baked image
-    st.markdown(get_image_download_link("streamlit_temp_baked_image.png"), unsafe_allow_html=True)
-
-# Function to handle debaking operation
-def debake(image_file, masking_scheme):
-
-    audio_filename = "streamlit_extracted_audio.wav"
-    
-    def audio_write_function(data):
-        audio = AudioSegment(
-            data=np.array(list(data), dtype=np.int16).tobytes(),
-            sample_width=2,
-            frame_rate=48000,
-            channels=1  # Mono
+def run_command(command):
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=True
         )
-        audio.export(audio_filename, format="wav")
+        return result.stdout
+    except FileNotFoundError:
+        st.error("The 'steggify' binary was not found. Please ensure it is correctly placed.")
+        return None
+    except subprocess.CalledProcessError as e:
+        st.error(f"Error during execution: {e.stderr}")
+        return None
+    except Exception as e:
+        st.error(f"Unexpected error: {e}")
+        return None
+
+def validate_masks(masks):
+    for mask in masks:
+        if len(mask) != 8 or not all(c in '01' for c in mask):
+            return False
+    return True
+
+def encode_image(input_image_path, input_data_path, masks, order, output_image_path):
+    try:
+        command = [
+            STEGGIFY_PATH,
+            "encode",
+            "-i", input_image_path,
+            "-d", input_data_path,
+            "-m", masks[0], masks[1], masks[2], masks[3],
+            "-o", output_image_path,
+            "-r", order
+        ]
+
+        st.info("Encoding data into image...")
+        output = run_command(command)
+        if output:
+            st.success("Encoding successful.")
+            st.text(output)
+            if os.path.isfile(output_image_path):
+                try:
+                    encoded_image = Image.open(output_image_path)
+                    st.image(encoded_image, caption="Encoded Image", use_column_width=True)
+                except Exception as img_e:
+                    st.error(f"Failed to load encoded image: {img_e}")
+                with open(output_image_path, "rb") as file:
+                    st.download_button(
+                        label="Download Encoded Image",
+                        data=file,
+                        file_name=os.path.basename(output_image_path),
+                        mime="image/png"
+                    )
+    except Exception as e:
+        st.error(f"Failed to encode image: {e}")
+
+def decode_image(input_image_path, masks, order, output_file_path):
+    try:
+        command = [
+            STEGGIFY_PATH,
+            "decode",
+            "-i", input_image_path,
+            "-m", masks[0], masks[1], masks[2], masks[3],
+            "-o", output_file_path,
+            "-r", order
+        ]
+
+        st.info("Decoding data from image...")
+        output = run_command(command)
+        if output:
+            st.success("Decoding successful.")
+            st.text(output)
+            if os.path.isfile(output_file_path):
+                if output_file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp')):
+                    try:
+                        decoded_image = Image.open(output_file_path)
+                        st.image(decoded_image, caption="Decoded Image", use_column_width=True)
+                    except Exception as img_e:
+                        st.error(f"Failed to load decoded image: {img_e}")
+                else:
+                    try:
+                        with open(output_file_path, "rb") as file:
+                            decoded_data = file.read()
+                            try:
+                                decoded_text = decoded_data.decode('utf-8')
+                                st.text_area("Decoded Data", decoded_text, height=200)
+                            except UnicodeDecodeError:
+                                st.download_button(
+                                    label="Download Decoded File",
+                                    data=decoded_data,
+                                    file_name=os.path.basename(output_file_path),
+                                    mime="application/octet-stream"
+                                )
+                    except Exception as file_e:
+                        st.error(f"Failed to read decoded file: {file_e}")
+    except Exception as e:
+        st.error(f"Failed to decode image: {e}")
+
+def create_white_image():
+    try:
+        img = Image.new('RGBA', (600, 600), color=(255, 255, 255, 255))
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        buf.name = "white_image.png"
+        buf.seek(0)
+        return buf
+    except Exception as e:
+        st.error(f"Error creating white image: {e}")
+        return None
+
+st.title("Steggify Encoder/Decoder")
+
+tab1, tab2, tab3 = st.tabs(["Encode", "Decode", "Demo"])
+
+with tab1:
+    st.header("Encode Data into Image")
+    with st.form("encode_form"):
+        input_image = st.file_uploader("Upload Input Image", type=["png", "jpg", "jpeg", "bmp"])
+        input_data = st.file_uploader("Upload Data File to Encode", type=["txt", "csv", "json", "bin", "mp3", "wav"])
+        st.markdown("### Masks (8-bit binary)")
+        col1, col2 = st.columns(2)
+        with col1:
+            mask_r = st.text_input("Mask for Red Channel", value="00001111")
+            mask_g = st.text_input("Mask for Green Channel", value="00001111")
+        with col2:
+            mask_b = st.text_input("Mask for Blue Channel", value="00001111")
+            mask_a = st.text_input("Mask for Alpha Channel", value="00001111")
+        order = st.selectbox("Channel Order", options=["ARGB", "RGBA", "BGRA", "ABGR", "ARBG"])
+        output_image = st.text_input("Output Image Filename", value="encoded_image.png")
+        submit_encode = st.form_submit_button("Encode")
+
+    if submit_encode:
+        if input_image and input_data:
+            masks = [mask_r, mask_g, mask_b, mask_a]
+            if not validate_masks(masks):
+                st.error("All masks must be 8-bit binary strings (e.g., '00001111').")
+            else:
+                try:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(input_image.name)[1]) as tmp_img:
+                        tmp_img.write(input_image.read())
+                        tmp_img_path = tmp_img.name
+
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(input_data.name)[1]) as tmp_data:
+                        tmp_data.write(input_data.read())
+                        tmp_data_path = tmp_data.name
+
+                    output_path = os.path.join(tempfile.gettempdir(), output_image)
+
+                    encode_image(tmp_img_path, tmp_data_path, masks, order, output_path)
+
+                except Exception as e:
+                    st.error(f"An unexpected error occurred during encoding: {e}")
+        else:
+            st.error("Please upload both an input image and a data file.")
+
+with tab2:
+    st.header("Decode Data from Image")
+    with st.form("decode_form"):
+        input_image = st.file_uploader("Upload Encoded Image", type=["png", "jpg", "jpeg", "bmp"])
+        st.markdown("### Masks (8-bit binary)")
+        col1, col2 = st.columns(2)
+        with col1:
+            mask_r = st.text_input("Mask for Red Channel", value="00001111")
+            mask_g = st.text_input("Mask for Green Channel", value="00001111")
+        with col2:
+            mask_b = st.text_input("Mask for Blue Channel", value="00001111")
+            mask_a = st.text_input("Mask for Alpha Channel", value="00001111")
+        order = st.selectbox("Channel Order", options=["ARGB", "RGBA", "BGRA", "ABGR", "ARBG"])
+        output_file = st.text_input("Output File Filename", value="decoded_data.bin")
+        submit_decode = st.form_submit_button("Decode")
+
+    if submit_decode:
+        if input_image:
+            masks = [mask_r, mask_g, mask_b, mask_a]
+            if not validate_masks(masks):
+                st.error("All masks must be 8-bit binary strings (e.g., '00001111').")
+            else:
+                try:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(input_image.name)[1]) as tmp_img:
+                        tmp_img.write(input_image.read())
+                        tmp_img_path = tmp_img.name
+
+                    output_path = os.path.join(tempfile.gettempdir(), output_file)
+
+                    decode_image(tmp_img_path, masks, order, output_path)
+
+                except Exception as e:
+                    st.error(f"An unexpected error occurred during decoding: {e}")
+        else:
+            st.error("Please upload an encoded image.")
+
+with tab3:
+    st.header("Demo")
+    st.write("Provide text or upload a file to encode into a white image, then decode it back.")
+    
+    demo_input_type = st.radio("Choose Input Type", ("Text", "File"))
+    
+    if demo_input_type == "Text":
+        demo_text = st.text_area("Enter text to encode", "Sample text for Steggify encoding.")
+        demo_masks = {}
+        demo_order = "ARGB"
+        if st.checkbox("Customize Masks and Channel Order"):
+            st.markdown("### Customize Masks (8-bit binary)")
+            col1, col2 = st.columns(2)
+            with col1:
+                demo_mask_r = st.text_input("Mask for Red Channel", value="00001111")
+                demo_mask_g = st.text_input("Mask for Green Channel", value="00001111")
+            with col2:
+                demo_mask_b = st.text_input("Mask for Blue Channel", value="00001111")
+                demo_mask_a = st.text_input("Mask for Alpha Channel", value="00001111")
+            demo_order = st.selectbox("Channel Order", options=["ARGB", "RGBA", "BGRA", "ABGR", "ARBG"])
+            demo_masks = [demo_mask_r, demo_mask_g, demo_mask_b, demo_mask_a]
+        else:
+            demo_masks = ["00001111", "00001111", "00001111", "00001111"]
         
-    #visualise the image
-    st.image(image_file, caption="Image to debake", use_column_width=True)
-    unified_algorithm_v1("debake",image_file, v2_masking,write_function=audio_write_function)
+        if st.button("Run Demo"):
+            if demo_text.strip():
+                if not validate_masks(demo_masks):
+                    st.error("All masks must be 8-bit binary strings (e.g., '00001111').")
+                else:
+                    try:
+                        masks = demo_masks
+                        order = demo_order
+                        output_image = "demo_encoded.png"
+                        output_file = "demo_decoded.txt"
+                        
+                        # Create white image
+                        white_image = create_white_image()
+                        if white_image is None:
+                            st.error("Failed to create sample white image.")
+                        else:
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_white_img:
+                                tmp_white_img.write(white_image.read())
+                                tmp_white_img_path = tmp_white_img.name
 
-    st.success("Audio extracted successfully!")
-    st.audio(audio_filename, format="audio/wav")
+                            # Save demo text to temporary file
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tmp_data:
+                                tmp_data.write(demo_text.encode('utf-8'))
+                                tmp_data_path = tmp_data.name
 
-# Function to generate a download link for files
-def get_image_download_link(file_path):
-    with open(file_path, 'rb') as f:
-        data = f.read()
-    b64 = base64.b64encode(data).decode('utf-8')
-    href = f'<a href="data:image/png;base64,{b64}" download="{file_path}">Download baked image</a>'
-    return href
+                            # Define output path
+                            output_path = os.path.join(tempfile.gettempdir(), output_image)
 
-# Main function to run the Streamlit app
-def main():
-    st.title("Unified Algorithm v1 Streamlit App")
+                            # Encode
+                            encode_image(tmp_white_img_path, tmp_data_path, masks, order, output_path)
 
-    action = st.selectbox("Select action:", ["Bake", "Debake"])
+                            # Decode
+                            decoded_output_path = os.path.join(tempfile.gettempdir(), output_file)
+                            decode_image(output_path, masks, order, decoded_output_path)
 
-    if action == "Bake":
-        st.warning("Its not recommended to use this app to bake, as its under maintenance, but still you can check how it affects the image")
-        st.write("Upload an image and an audio file to encode (\'BAKE\') the audio into the image.")
-        image_file = st.file_uploader("Upload Image", type=["png"])
-        audio_file = st.file_uploader("Upload Audio (WAV)", type=["wav"])
+                            # Read decoded text
+                            if os.path.isfile(decoded_output_path):
+                                try:
+                                    with open(decoded_output_path, "r") as f:
+                                        decoded_text = f.read()
+                                        st.text_area("Decoded Text", decoded_text, height=200)
+                                except Exception as read_e:
+                                    st.error(f"Failed to read decoded text: {read_e}")
+                            else:
+                                st.error("Decoded file not found.")
 
-        if st.button("Bake"):
-            if image_file and audio_file:
-                bake(image_file, audio_file, v2_masking)  # Use v1_masking or v2_masking based on your choice
+                            # Display encoded image
+                            if os.path.isfile(output_path):
+                                try:
+                                    encoded_image = Image.open(output_path)
+                                    st.image(encoded_image, caption="Encoded Image", use_column_width=True)
+                                except Exception as img_e:
+                                    st.error(f"Failed to load encoded image: {img_e}")
+                            else:
+                                st.error("Encoded image not found.")
+
+                            # Cleanup
+                            try:
+                                os.remove(tmp_white_img_path)
+                                os.remove(tmp_data_path)
+                                if os.path.exists(output_path):
+                                    os.remove(output_path)
+                                if os.path.exists(decoded_output_path):
+                                    os.remove(decoded_output_path)
+                            except Exception as cleanup_e:
+                                st.warning(f"Failed to clean up temporary files: {cleanup_e}")
+                    except Exception as e:
+                        st.error(f"Demo failed: {e}")
             else:
-                st.warning("Please upload both image and audio files.")
+                st.error("Please enter some text to encode.")
+    
+    else:
+        demo_file = st.file_uploader("Upload a file to encode", type=["txt", "csv", "json", "bin", "mp3", "wav"])
+        demo_masks = {}
+        demo_order = "ARGB"
+        if st.checkbox("Customize Masks and Channel Order"):
+            st.markdown("### Customize Masks (8-bit binary)")
+            col1, col2 = st.columns(2)
+            with col1:
+                demo_mask_r = st.text_input("Mask for Red Channel", value="00001111")
+                demo_mask_g = st.text_input("Mask for Green Channel", value="00001111")
+            with col2:
+                demo_mask_b = st.text_input("Mask for Blue Channel", value="00001111")
+                demo_mask_a = st.text_input("Mask for Alpha Channel", value="00001111")
+            demo_order = st.selectbox("Channel Order", options=["ARGB", "RGBA", "BGRA", "ABGR", "ARBG"])
+            demo_masks = [demo_mask_r, demo_mask_g, demo_mask_b, demo_mask_a]
+        else:
+            demo_masks = ["00001111", "00001111", "00001111", "00001111"]
+        
+        if st.button("Run Demo"):
+            if demo_file:
+                if not validate_masks(demo_masks):
+                    st.error("All masks must be 8-bit binary strings (e.g., '00001111').")
+                else:
+                    try:
+                        masks = demo_masks
+                        order = demo_order
+                        output_image = "demo_encoded.png"
+                        output_file = "demo_decoded" + os.path.splitext(demo_file.name)[1]
+                        
+                        # Create white image
+                        white_image = create_white_image()
+                        if white_image is None:
+                            st.error("Failed to create sample white image.")
+                        else:
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_white_img:
+                                tmp_white_img.write(white_image.read())
+                                tmp_white_img_path = tmp_white_img.name
 
-    elif action == "Debake":
-        st.write("Upload an image to decode ('DEBAKE\') the audio from the image.")
-        image_file = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg"])
+                            # Save uploaded file to temporary file
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(demo_file.name)[1]) as tmp_data:
+                                tmp_data.write(demo_file.read())
+                                tmp_data_path = tmp_data.name
 
-        if st.button("Debake"):
-            if image_file:
-                debake(image_file, v2_masking)  # Use v1_masking or v2_masking based on your choice
+                            # Define output path
+                            output_path = os.path.join(tempfile.gettempdir(), output_image)
+
+                            # Encode
+                            encode_image(tmp_white_img_path, tmp_data_path, masks, order, output_path)
+
+                            # Decode
+                            decoded_output_path = os.path.join(tempfile.gettempdir(), output_file)
+                            decode_image(output_path, masks, order, decoded_output_path)
+
+                            # Provide download button for decoded file
+                            if os.path.isfile(decoded_output_path):
+                                try:
+                                    with open(decoded_output_path, "rb") as f:
+                                        decoded_data = f.read()
+                                        st.download_button(
+                                            label="Download Decoded File",
+                                            data=decoded_data,
+                                            file_name=output_file,
+                                            mime="application/octet-stream"
+                                        )
+                                except Exception as read_e:
+                                    st.error(f"Failed to read decoded file: {read_e}")
+                            else:
+                                st.error("Decoded file not found.")
+
+                            # Display encoded image
+                            if os.path.isfile(output_path):
+                                try:
+                                    encoded_image = Image.open(output_path)
+                                    st.image(encoded_image, caption="Encoded Image", use_column_width=True)
+                                except Exception as img_e:
+                                    st.error(f"Failed to load encoded image: {img_e}")
+                            else:
+                                st.error("Encoded image not found.")
+
+                            # Cleanup
+                            try:
+                                os.remove(tmp_white_img_path)
+                                os.remove(tmp_data_path)
+                                if os.path.exists(output_path):
+                                    os.remove(output_path)
+                                if os.path.exists(decoded_output_path):
+                                    os.remove(decoded_output_path)
+                            except Exception as cleanup_e:
+                                st.warning(f"Failed to clean up temporary files: {cleanup_e}")
+                    except Exception as e:
+                        st.error(f"Demo failed: {e}")
             else:
-                st.warning("Please upload an image file.")
-
-if __name__ == "__main__":
-    main()
+                st.error("Please upload a file to encode.")
