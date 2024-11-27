@@ -219,7 +219,7 @@ def create_white_image():
 
 st.title("Steggify Encoder/Decoder")
 
-tab1, tab2, tab3 = st.tabs(["Encode", "Decode", "Demo"])
+tab3, tab1, tab2 = st.tabs(["Demo", "Encode", "Decode"])
 
 with tab1:
     st.header("Encode Data into Image")
@@ -448,7 +448,7 @@ with tab3:
                             output_path = os.path.join(tempfile.gettempdir(), output_image)
 
                             # Encode
-                            encode_image(tmp_img_path=tmp_white_img_path, 
+                            encode_image(tmp_white_img_path, 
                                          input_data_path=tmp_data_path, 
                                          masks=masks, 
                                          order=order, 
