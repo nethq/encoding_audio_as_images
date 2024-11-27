@@ -139,7 +139,8 @@ def encode_image(input_image_path, input_data_path, masks, order, output_image_p
         output = run_command(command)
         if output:
             st.success("Encoding successful.")
-            st.text(output)
+            with st.expander("View Command Output", expanded=False):
+                st.text(output)
             if os.path.isfile(output_image_path):
                 try:
                     encoded_image = Image.open(output_image_path)
@@ -172,7 +173,8 @@ def decode_image(input_image_path, masks, order, output_file_path):
         output = run_command(command)
         if output:
             st.success("Decoding successful.")
-            st.text(output)
+            with st.expander("View Command Output", expanded=False):
+                st.text(output)
             if os.path.isfile(output_file_path):
                 if output_file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp')):
                     try:
@@ -224,7 +226,7 @@ tab3, tab1, tab2 = st.tabs(["Demo", "Encode", "Decode"])
 with tab1:
     st.header("Encode Data into Image")
     with st.form("encode_form"):
-        input_image = st.file_uploader("Upload Input Image", type=["png"])
+        input_image = st.file_uploader("Upload Input Image (PNG only)", type=["png"])
         input_data = st.file_uploader("Upload Data File to Encode", type=["txt", "csv", "json", "bin", "mp3", "wav"])
         st.markdown("### Masks (8-bit binary)")
         col1, col2 = st.columns(2)
@@ -265,7 +267,7 @@ with tab1:
 with tab2:
     st.header("Decode Data from Image")
     with st.form("decode_form"):
-        input_image = st.file_uploader("Upload Encoded Image", type=["png"])
+        input_image = st.file_uploader("Upload Encoded Image (PNG only)", type=["png"])
         st.markdown("### Masks (8-bit binary)")
         col1, col2 = st.columns(2)
         with col1:
