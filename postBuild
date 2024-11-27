@@ -1,0 +1,4 @@
+#!/bin/bash
+# Example setup commands
+echo "Running setup tasks..."
+# Add your setup commands here
