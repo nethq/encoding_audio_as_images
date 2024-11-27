@@ -13,6 +13,75 @@ st.set_page_config(
     initial_sidebar_state="auto",
 )
 
+import os
+import subprocess
+import streamlit as st
+
+# Path to the binary and marker file
+BINARY_PATH = "binaries/steggify"
+MARKER_FILE = "binaries/setup_complete"
+
+def setup_binary():
+    """
+    This function compiles the binary if it doesn't exist.
+    It runs only once during deployment by checking the presence of a marker file.
+    """
+    # Check if setup has already been completed
+    if os.path.exists(MARKER_FILE):
+        st.info("Setup has already been completed.")
+        return
+    
+    try:
+        st.info("Setting up the binary. This may take a few minutes...")
+
+        # Clone the repository
+        if not os.path.exists("encoding_audio_as_images"):
+            subprocess.run(
+                ["git", "clone", "--branch", "v3", "https://github.com/nethq/encoding_audio_as_images.git"],
+                check=True,
+                text=True
+            )
+
+        # Change directory and compile
+        os.chdir("encoding_audio_as_images/cpp")
+        subprocess.run(["make"], check=True, text=True)
+        os.chdir("../../")
+
+        # Create binaries directory if it doesn't exist
+        os.makedirs("binaries", exist_ok=True)
+
+        # Move the compiled binary to binaries directory
+        subprocess.run(["mv", "encoding_audio_as_images/bin/steggify", BINARY_PATH], check=True)
+
+        # Mark as executable
+        os.chmod(BINARY_PATH, 0o755)
+
+        # Create marker file to indicate successful setup
+        with open(MARKER_FILE, "w") as f:
+            f.write("Setup completed successfully.")
+
+        # Cleanup cloned repository to save space
+        subprocess.run(["rm", "-rf", "encoding_audio_as_images"], check=True)
+
+        st.success("Binary setup completed successfully!")
+
+    except subprocess.CalledProcessError as e:
+        st.error(f"Error during setup: {e}")
+        raise RuntimeError("Setup failed. Please check the logs.")
+    except Exception as e:
+        st.error(f"Unexpected error: {e}")
+        raise RuntimeError("Unexpected error during setup.")
+
+# Ensure the binary is set up before starting the app
+if not os.path.exists(BINARY_PATH):
+    setup_binary()
+elif not os.access(BINARY_PATH, os.X_OK):
+    st.error(f"The binary at {BINARY_PATH} is not executable. Please check the setup.")
+
+st.title("Streamlit App with On-Demand Binary Setup")
+st.write("If the binary is not present, it will be built automatically during the first deployment.")
+
+
 # Determine the correct binary based on system architecture
 try:
     STEGGIFY_PATH = os.path.join(os.getcwd(), "binaries/steggify")
