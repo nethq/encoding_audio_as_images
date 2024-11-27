@@ -312,15 +312,15 @@ with tab3:
         if customize_demo:
             col1, col2 = st.columns(2)
             with col1:
-                demo_mask_r = st.text_input("Mask for Red Channel", value="00001111")
-                demo_mask_g = st.text_input("Mask for Green Channel", value="00001111")
+                demo_mask_r = st.text_input("Mask for Red Channel", value="01100011")
+                demo_mask_g = st.text_input("Mask for Green Channel", value="01100011")
             with col2:
-                demo_mask_b = st.text_input("Mask for Blue Channel", value="00001111")
-                demo_mask_a = st.text_input("Mask for Alpha Channel", value="00001111")
+                demo_mask_b = st.text_input("Mask for Blue Channel", value="01100011")
+                demo_mask_a = st.text_input("Mask for Alpha Channel", value="01100011")
             demo_order = st.selectbox("Channel Order", options=["ARGB", "RGBA", "BGRA", "ABGR", "ARBG"], index=0)
             demo_masks = [demo_mask_r, demo_mask_g, demo_mask_b, demo_mask_a]
         else:
-            demo_masks = ["00001111", "00001111", "00001111", "00001111"]
+            demo_masks = ["01100011", "01100011", "01100011", "01100011"]
             demo_order = "ARGB"
 
         if st.button("Run Demo"):
