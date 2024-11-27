@@ -352,7 +352,7 @@ with tab3:
                             output_path = os.path.join(tempfile.gettempdir(), output_image)
 
                             # Encode
-                            encode_image(tmp_img_path=tmp_white_img_path, 
+                            encode_image(tmp_white_img_path, 
                                          input_data_path=tmp_data_path, 
                                          masks=masks, 
                                          order=order, 
