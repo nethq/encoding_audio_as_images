@@ -45,15 +45,16 @@ def setup_binary():
         # Change directory and compile
         os.chdir("encoding_audio_as_images/cpp")
         subprocess.run(["make"], check=True, text=True)
-        os.chdir("../../")
-
+        
         # Create binaries directory if it doesn't exist
-        os.makedirs("binaries", exist_ok=True)
+        os.makedirs("../../binaries", exist_ok=True)
 
         # Move the compiled binary to binaries directory
-        subprocess.run(["mv", "encoding_audio_as_images/bin/steggify", BINARY_PATH], check=True)
+        subprocess.run(["mv", "encoding_audio_as_images/bin/steggify", "../../binaries/"], check=True)
 
         # Mark as executable
+        os.chdir("../../")
+        
         os.chmod(BINARY_PATH, 0o755)
 
         # Create marker file to indicate successful setup
