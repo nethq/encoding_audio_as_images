@@ -13,10 +13,6 @@ st.set_page_config(
     initial_sidebar_state="auto",
 )
 
-import os
-import subprocess
-import streamlit as st
-
 # Path to the binary and marker file
 BINARY_PATH = "binaries/steggify"
 MARKER_FILE = "binaries/setup_complete"
@@ -49,7 +45,6 @@ def setup_binary():
         subprocess.run(["make"], check=True, text=True)
 
         # Move the compiled binary to binaries directory
-        #check if compilation has returned any file under bin, by getting all files under bin, and if its only one and its executable, send it to binaries/steggify
         files = os.listdir("bin")
         if len(files) != 1:
             raise RuntimeError("Compilation failed. No binary found.")
@@ -84,9 +79,8 @@ if not os.path.exists(BINARY_PATH):
 elif not os.access(BINARY_PATH, os.X_OK):
     st.error(f"The binary at {BINARY_PATH} is not executable. Please check the setup.")
 
-st.title("Streamlit App with On-Demand Binary Setup")
+st.title("Steggify Encoder/Decoder")
 st.write("If the binary is not present, it will be built automatically during the first deployment.")
-
 
 # Determine the correct binary based on system architecture
 try:
@@ -205,16 +199,22 @@ def decode_image(input_image_path, masks, order, output_file_path):
     except Exception as e:
         st.error(f"Failed to decode image: {e}")
 
-def create_white_image():
+def create_half_white_black_image():
     try:
-        img = Image.new('RGBA', (600, 600), color=(255, 255, 255, 255))
+        img_width, img_height = 600, 600
+        img = Image.new('RGBA', (img_width, img_height), color=(255, 255, 255, 255))  # Start with white
+
+        # Create a black rectangle for the right half
+        black_half = Image.new('RGBA', (img_width // 2, img_height), color=(0, 0, 0, 255))
+        img.paste(black_half, (img_width // 2, 0))
+
         buf = io.BytesIO()
         img.save(buf, format='PNG')
-        buf.name = "white_image.png"
+        buf.name = "half_white_black_image.png"
         buf.seek(0)
         return buf
     except Exception as e:
-        st.error(f"Error creating white image: {e}")
+        st.error(f"Error creating half-white-half-black image: {e}")
         return None
 
 st.title("Steggify Encoder/Decoder")
@@ -224,7 +224,7 @@ tab3, tab1, tab2 = st.tabs(["Demo", "Encode", "Decode"])
 with tab1:
     st.header("Encode Data into Image")
     with st.form("encode_form"):
-        input_image = st.file_uploader("Upload Input Image", type=["png", "jpg", "jpeg", "bmp"])
+        input_image = st.file_uploader("Upload Input Image", type=["png"])
         input_data = st.file_uploader("Upload Data File to Encode", type=["txt", "csv", "json", "bin", "mp3", "wav"])
         st.markdown("### Masks (8-bit binary)")
         col1, col2 = st.columns(2)
@@ -245,8 +245,7 @@ with tab1:
                 st.error("All masks must be 8-bit binary strings (e.g., '00001111').")
             else:
                 try:
-                    
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(input_image.name)[1]) as tmp_img:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
                         tmp_img.write(input_image.read())
                         tmp_img_path = tmp_img.name
 
@@ -266,7 +265,7 @@ with tab1:
 with tab2:
     st.header("Decode Data from Image")
     with st.form("decode_form"):
-        input_image = st.file_uploader("Upload Encoded Image", type=["png", "jpg", "jpeg", "bmp"])
+        input_image = st.file_uploader("Upload Encoded Image", type=["png"])
         st.markdown("### Masks (8-bit binary)")
         col1, col2 = st.columns(2)
         with col1:
@@ -286,7 +285,7 @@ with tab2:
                 st.error("All masks must be 8-bit binary strings (e.g., '00001111').")
             else:
                 try:
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(input_image.name)[1]) as tmp_img:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_img:
                         tmp_img.write(input_image.read())
                         tmp_img_path = tmp_img.name
 
@@ -301,7 +300,7 @@ with tab2:
 
 with tab3:
     st.header("Demo")
-    st.write("Provide text or upload a file to encode into a white image, then decode it back.")
+    st.write("Provide text or upload a file to encode into a half-white-half-black image, then decode it back.")
 
     demo_input_type = st.radio("Choose Input Type", ("Text", "File"))
 
@@ -334,14 +333,14 @@ with tab3:
                         output_image = "demo_encoded.png"
                         output_file = "demo_decoded.txt"
 
-                        # Create white image
-                        white_image = create_white_image()
-                        if white_image is None:
-                            st.error("Failed to create sample white image.")
+                        # Create half-white-half-black image
+                        half_image = create_half_white_black_image()
+                        if half_image is None:
+                            st.error("Failed to create sample half-white-half-black image.")
                         else:
-                            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_white_img:
-                                tmp_white_img.write(white_image.read())
-                                tmp_white_img_path = tmp_white_img.name
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_half_img:
+                                tmp_half_img.write(half_image.read())
+                                tmp_half_img_path = tmp_half_img.name
 
                             # Save demo text to temporary file
                             with tempfile.NamedTemporaryFile(delete=False, suffix=".txt") as tmp_data:
@@ -352,7 +351,7 @@ with tab3:
                             output_path = os.path.join(tempfile.gettempdir(), output_image)
 
                             # Encode
-                            encode_image(tmp_white_img_path, 
+                            encode_image(tmp_half_img_path, 
                                          input_data_path=tmp_data_path, 
                                          masks=masks, 
                                          order=order, 
@@ -388,7 +387,7 @@ with tab3:
 
                             # Cleanup
                             try:
-                                os.remove(tmp_white_img_path)
+                                os.remove(tmp_half_img_path)
                                 os.remove(tmp_data_path)
                                 if os.path.exists(output_path):
                                     os.remove(output_path)
@@ -430,14 +429,14 @@ with tab3:
                         output_image = "demo_encoded.png"
                         output_file = "demo_decoded" + os.path.splitext(demo_file.name)[1]
 
-                        # Create white image
-                        white_image = create_white_image()
-                        if white_image is None:
-                            st.error("Failed to create sample white image.")
+                        # Create half-white-half-black image
+                        half_image = create_half_white_black_image()
+                        if half_image is None:
+                            st.error("Failed to create sample half-white-half-black image.")
                         else:
-                            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_white_img:
-                                tmp_white_img.write(white_image.read())
-                                tmp_white_img_path = tmp_white_img.name
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp_half_img:
+                                tmp_half_img.write(half_image.read())
+                                tmp_half_img_path = tmp_half_img.name
 
                             # Save uploaded file to temporary file
                             with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(demo_file.name)[1]) as tmp_data:
@@ -448,7 +447,7 @@ with tab3:
                             output_path = os.path.join(tempfile.gettempdir(), output_image)
 
                             # Encode
-                            encode_image(tmp_white_img_path, 
+                            encode_image(tmp_half_img_path, 
                                          input_data_path=tmp_data_path, 
                                          masks=masks, 
                                          order=order, 
@@ -489,7 +488,7 @@ with tab3:
 
                             # Cleanup
                             try:
-                                os.remove(tmp_white_img_path)
+                                os.remove(tmp_half_img_path)
                                 os.remove(tmp_data_path)
                                 if os.path.exists(output_path):
                                     os.remove(output_path)
