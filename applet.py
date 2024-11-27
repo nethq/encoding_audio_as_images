@@ -56,6 +56,7 @@ def setup_binary():
         if not os.access(f"bin/{files[0]}", os.X_OK):
             raise RuntimeError("Compiled binary is not executable.")
         subprocess.run(["mv", f"bin/{files[0]}", "../../binaries/steggify"], check=True)
+        
         # Mark as executable
         os.chdir("../../")
         
@@ -149,7 +150,6 @@ def encode_image(input_image_path, input_data_path, masks, order, output_image_p
                 try:
                     encoded_image = Image.open(output_image_path)
                     # Resize image to take up ~60% of horizontal space
-                    encoded_image.thumbnail((int(st.get_window_width() * 0.6), None))
                     st.image(encoded_image, caption="Encoded Image", use_column_width=False)
                 except Exception as img_e:
                     st.error(f"Failed to load encoded image: {img_e}")
@@ -183,7 +183,6 @@ def decode_image(input_image_path, masks, order, output_file_path):
                 if output_file_path.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp')):
                     try:
                         decoded_image = Image.open(output_file_path)
-                        decoded_image.thumbnail((int(st.get_window_width() * 0.6), None))
                         st.image(decoded_image, caption="Decoded Image", use_column_width=False)
                     except Exception as img_e:
                         st.error(f"Failed to load decoded image: {img_e}")
@@ -246,6 +245,7 @@ with tab1:
                 st.error("All masks must be 8-bit binary strings (e.g., '00001111').")
             else:
                 try:
+                    
                     with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(input_image.name)[1]) as tmp_img:
                         tmp_img.write(input_image.read())
                         tmp_img_path = tmp_img.name
@@ -380,7 +380,6 @@ with tab3:
                             if os.path.isfile(output_path):
                                 try:
                                     encoded_image = Image.open(output_path)
-                                    encoded_image.thumbnail((int(st.get_window_width() * 0.6), None))
                                     st.image(encoded_image, caption="Encoded Image", use_column_width=False)
                                 except Exception as img_e:
                                     st.error(f"Failed to load encoded image: {img_e}")
@@ -482,7 +481,6 @@ with tab3:
                             if os.path.isfile(output_path):
                                 try:
                                     encoded_image = Image.open(output_path)
-                                    encoded_image.thumbnail((int(st.get_window_width() * 0.6), None))
                                     st.image(encoded_image, caption="Encoded Image", use_column_width=False)
                                 except Exception as img_e:
                                     st.error(f"Failed to load encoded image: {img_e}")
