@@ -33,6 +33,8 @@ def setup_binary():
     
     try:
         st.info("Setting up the binary. This may take a few minutes...")
+        # Create binaries directory if it doesn't exist
+        os.makedirs("binaries", exist_ok=True)
 
         # Clone the repository
         if not os.path.exists("encoding_audio_as_images"):
@@ -45,13 +47,15 @@ def setup_binary():
         # Change directory and compile
         os.chdir("encoding_audio_as_images/cpp")
         subprocess.run(["make"], check=True, text=True)
-        
-        # Create binaries directory if it doesn't exist
-        os.makedirs("../../binaries", exist_ok=True)
 
         # Move the compiled binary to binaries directory
-        subprocess.run(["mv", "encoding_audio_as_images/bin/steggify", "../../binaries/"], check=True)
-
+        #check if compilation has returned any file under bin, by getting all files under bin, and if its only one and its executable, send it to binaries/steggify
+        files = os.listdir("bin")
+        if len(files) != 1:
+            raise RuntimeError("Compilation failed. No binary found.")
+        if not os.access(f"bin/{files[0]}", os.X_OK):
+            raise RuntimeError("Compiled binary is not executable.")
+        subprocess.run(["mv", f"bin/{files[0]}", "../../binaries/steggify"], check=True)
         # Mark as executable
         os.chdir("../../")
         
