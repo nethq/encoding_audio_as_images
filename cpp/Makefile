@@ -85,8 +85,8 @@ compile:
 	@echo "compiled_binary: $(BASE_BINARY)"
 	@echo "compiler: $(COMPILER)"
 	@mkdir -p $(BIN_DIR)
-	time $(COMPILER) $(CFLAGS) $(TARGET_SRC) -o $(BIN_DIR)/$(BASE_BINARY)
-	@echo "Built $(BIN_DIR)/$(BASE_BINARY)"
+	$(COMPILER) $(CFLAGS) $(TARGET_SRC) -o $(BIN_DIR)/$(BASE_BINARY)
+	$(info Built $(BIN_DIR)/$(BASE_BINARY))
 
 # =======================
 # Cross-Compilation Targets
